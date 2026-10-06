@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+.angular/
+*.log
+.smoke-data/
+smoke-preview.png
+parchment-preview.png
+characters-preview.png
+run-journal-preview.png

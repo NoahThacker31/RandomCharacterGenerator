@@ -1,0 +1,12 @@
+const {app,BrowserWindow,ipcMain,dialog}=require('electron');
+const fs=require('node:fs/promises');const path=require('node:path');
+app.setPath('userData',path.join(app.getPath('appData'),'oblivion-random-character'));
+let file;let queue=Promise.resolve();
+const empty=()=>({version:1,characters:[]});
+async function read(){try{return JSON.parse(await fs.readFile(file,'utf8'));}catch(e){if(e.code==='ENOENT')return empty();throw new Error('Could not read characters.json. Your existing file has been preserved. '+e.message);}}
+app.whenReady().then(()=>{file=path.join(app.getPath('userData'),'characters.json');
+ipcMain.handle('ledger:load',()=>read());ipcMain.handle('ledger:path',()=>file);
+ipcMain.handle('ledger:save',(_,data)=>{const task=queue.then(async()=>{if(data?.version!==1||!Array.isArray(data.characters))throw Error('Invalid ledger');await fs.mkdir(path.dirname(file),{recursive:true});const tmp=file+'.tmp';await fs.writeFile(tmp,JSON.stringify(data,null,2),'utf8');await fs.rename(tmp,file);});queue=task.catch(()=>{});return task;});
+ipcMain.handle('ledger:export',async()=>{const result=await dialog.showSaveDialog({defaultPath:'characters-backup.json',filters:[{name:'JSON',extensions:['json']}]});if(!result.canceled){await queue;await fs.writeFile(result.filePath,JSON.stringify(await read(),null,2));return true;}return false;});
+const win=new BrowserWindow({width:1600,height:1000,minWidth:850,minHeight:650,title:'Oblivion Remastered: Random Character Generator',backgroundColor:'#25211c',icon:path.join(__dirname,'icon.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});let flushReady=false,allowClose=false;ipcMain.on('ledger:flush-ready',event=>{if(event.sender===win.webContents)flushReady=true;});ipcMain.on('ledger:flushed',async event=>{if(event.sender!==win.webContents)return;await queue;allowClose=true;win.close();});win.webContents.on('did-start-loading',()=>{flushReady=false;});win.on('close',event=>{if(allowClose||!flushReady||win.webContents.isDestroyed())return;event.preventDefault();win.webContents.send('ledger:flush');});win.setMenuBarVisibility(false);win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',e=>e.preventDefault());win.loadFile(path.join(__dirname,'../dist/randomizer/browser/index.html'));});
+app.on('window-all-closed',()=>app.quit());

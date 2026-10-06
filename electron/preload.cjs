@@ -1,0 +1,2 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('ledger',{load:()=>ipcRenderer.invoke('ledger:load'),save:data=>ipcRenderer.invoke('ledger:save',data),path:()=>ipcRenderer.invoke('ledger:path'),export:()=>ipcRenderer.invoke('ledger:export'),onFlush:callback=>{ipcRenderer.on('ledger:flush',()=>Promise.resolve(callback()).then(()=>ipcRenderer.send('ledger:flushed')));ipcRenderer.send('ledger:flush-ready');}});
